@@ -1,0 +1,112 @@
+//7/21/26 4:58pm 3rd draft of motors
+//Used copilot to write a draft that uses joystick
+//input instead of keyboard input
+
+#include <Servo.h>
+
+// -------------------------
+// Servo Objects
+// -------------------------
+Servo motorA;   // Standard 180° servo (lifting arm)
+Servo motorW;   // Continuous rotation servo (wheel)
+
+// -------------------------
+// Pins
+// -------------------------
+const int motorAPin = 9;
+const int motorWPin = 10;
+const int joyPin    = A0;   // Joystick wiper
+
+// -------------------------
+// Continuous rotation timing
+// -------------------------
+const unsigned long oneRotationTime = 1000; // ms per rotation
+const int rotations = 5;
+
+// -------------------------
+// Joystick thresholds
+// Tune these after testing
+// -------------------------
+const int leftThreshold  = 300;   // Mode 0
+const int centerLow      = 450;   // Mode 90 lower bound
+const int centerHigh     = 600;   // Mode 90 upper bound
+const int rightThreshold = 750;   // Mode 180
+
+void setup() {
+  Serial.begin(9600);
+
+  motorA.attach(motorAPin);
+  motorW.attach(motorWPin);
+
+  motorA.write(90);  // rest
+  motorW.write(90);  // stop
+
+  Serial.println("Joystick Control Ready");
+}
+
+void loop() {
+
+  int joy = analogRead(joyPin);
+
+  // Debug
+  Serial.print("Joystick: ");
+  Serial.println(joy);
+
+  // -------------------------
+  // Mode Selection
+  // -------------------------
+
+  if (joy < leftThreshold) {
+    mode0();
+  }
+  else if (joy > centerLow && joy < centerHigh) {
+    mode90();
+  }
+  else if (joy > rightThreshold) {
+    mode180();
+  }
+
+  delay(50); // small debounce
+}
+
+
+// -------------------------
+// Motor A = 0°
+// Motor W spins CW 5 times
+// -------------------------
+void mode0() {
+  Serial.println("Mode 0");
+
+  motorA.write(0);
+  delay(1000);
+
+  motorW.write(180); // CW
+  delay(rotations * oneRotationTime);
+  motorW.write(90);  // stop
+}
+
+// -------------------------
+// Motor A = 90°
+// Motor W stopped
+// -------------------------
+void mode90() {
+  Serial.println("Mode 90");
+
+  motorA.write(90);
+  motorW.write(90);
+}
+
+// -------------------------
+// Motor A = 180°
+// Motor W spins CCW 5 times
+// -------------------------
+void mode180() {
+  Serial.println("Mode 180");
+
+  motorA.write(180);
+  delay(1000);
+
+  motorW.write(0); // CCW
+  delay(rotations * oneRotationTime);
+  motorW.write(90); // stop
+}
