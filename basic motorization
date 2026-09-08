@@ -1,36 +1,49 @@
-//7/21/26 4:58pm 3rd draft of motors
-//Used copilot to write a draft that uses joystick
-//input instead of keyboard input
+//8/31/26 
+//Continuous rotation motor changed from MG90D to BLS-HV70MG
+//Changed rotation time from 2000ms to 4000ms for slower wheel rotation
+//Added safeReset() to begin the servos at a safe position, mode 90
+
 
 #include <Servo.h>
 
 // -------------------------
 // Servo Objects
-// -------------------------
-Servo motorA;   // Standard 180° servo (lifting arm)
-Servo motorW;   // Continuous rotation servo (wheel)
+Servo motorA;   // Standard 180° servo motor MG995 (lifting arm)
+Servo motorW;   // Continuous rotation servo motor BLS-HV70MG (wheel)
+
 
 // -------------------------
 // Pins
-// -------------------------
-const int motorAPin = 9;
+const int motorAPin = 5;    // both motors should be connected to digital pins
 const int motorWPin = 10;
-const int joyPin    = A0;   // Joystick wiper
+const int joyPin    = A0;   // joystick should be connected to an analog pin
+
 
 // -------------------------
 // Continuous rotation timing
-// -------------------------
-const unsigned long oneRotationTime = 1000; // ms per rotation
+const unsigned long oneRotationTime = 4000; // milliseconds per rotation
 const int rotations = 5;
 
 // -------------------------
 // Joystick thresholds
 // Tune these after testing
-// -------------------------
 const int leftThreshold  = 300;   // Mode 0
 const int centerLow      = 450;   // Mode 90 lower bound
 const int centerHigh     = 600;   // Mode 90 upper bound
 const int rightThreshold = 750;   // Mode 180
+
+// -------------------------
+// Joystick smoothing
+float filteredJoy = 512;
+
+// -------------------------
+// System State (makes the project a state machine)
+bool modeRunning = false;       // will be true while a mode is running
+bool joystickReturned = true;   // the joystick must be returned to the center before another mode runs
+unsigned long lastRunTime = 0;
+
+const unsigned long cooldownTime = 3000;  // 3 sec between activations
+const unsigned long thermalDelay = 5000;  // an extra pause after the wheel spins
 
 void setup() {
   Serial.begin(9600);
@@ -41,40 +54,81 @@ void setup() {
   motorA.write(90);  // rest
   motorW.write(90);  // stop
 
+  safeReset(); //everything begins from safe position
+
   Serial.println("Joystick Control Ready");
+
+
 }
 
 void loop() {
 
-  int joy = analogRead(joyPin);
+  if (modeRunning) { return; }  // The logic doesn't jump around even if joystick is played with while the motors run
+                                // because program is a state machine
+  
+  int rawJoy = analogRead(joyPin);
+
+  filteredJoy = 0.8 * filteredJoy + 0.2 * rawJoy;
+
+  int joy = (int)filteredJoy;
 
   // Debug
   Serial.print("Joystick: ");
-  Serial.println(joy);
+  Serial.println(rawJoy);
 
+  // Cooldown (so visitors can't spam input)
+  if (millis() - lastRunTime < cooldownTime) { return; }
+
+  // if joystick reads impossible values, nothing dangerous occurs
+  if (joy < 10 || joy > 1010) {
+    Serial.println("Joystick Fault");
+    return;
+  }
+  
   // -------------------------
   // Mode Selection
   // -------------------------
+  if (joy > centerLow && joy < centerHigh) //****LEFT OFF HERE 8/4/26 ONE SHOT ACTIVATION****
+  {
+    joystickReturned = true;
+  }
 
-  if (joy < leftThreshold) {
+  if (!joystickReturned)
+  {
+    return;
+  }
+
+  if (joy < leftThreshold)
+  {
+    joystickReturned = false;
     mode0();
   }
-  else if (joy > centerLow && joy < centerHigh) {
-    mode90();
-  }
-  else if (joy > rightThreshold) {
+
+  else if (joy > rightThreshold)
+  {
+    joystickReturned = false;
     mode180();
   }
 
-  delay(50); // small debounce
 }
+  //--------------------------
+  // Safe Reset
+  //--------------------------
+  void safeReset(){
+    motorW.write(90);
+    delay(200);
 
+    motorA.write(90);
+    delay(700);
+  }
 
 // -------------------------
+// MODE 0
 // Motor A = 0°
-// Motor W spins CW 5 times
+// Motor W spins ClockWise 5 times
 // -------------------------
 void mode0() {
+  modeRunning = true;
   Serial.println("Mode 0");
 
   motorA.write(0);
@@ -83,24 +137,34 @@ void mode0() {
   motorW.write(180); // CW
   delay(rotations * oneRotationTime);
   motorW.write(90);  // stop
+  lastRunTime = millis();
+
+modeRunning = false;
 }
 
 // -------------------------
+// MODE 90
 // Motor A = 90°
 // Motor W stopped
 // -------------------------
 void mode90() {
+  modeRunning = true;
   Serial.println("Mode 90");
 
   motorA.write(90);
   motorW.write(90);
+  lastRunTime = millis();
+
+modeRunning = false;
 }
 
 // -------------------------
+// MODE 180
 // Motor A = 180°
-// Motor W spins CCW 5 times
+// Motor W spins CounterClockWise 5 times
 // -------------------------
 void mode180() {
+  modeRunning = true;
   Serial.println("Mode 180");
 
   motorA.write(180);
@@ -109,4 +173,7 @@ void mode180() {
   motorW.write(0); // CCW
   delay(rotations * oneRotationTime);
   motorW.write(90); // stop
+  lastRunTime = millis();
+
+modeRunning = false;
 }
