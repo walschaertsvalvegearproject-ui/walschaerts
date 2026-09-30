@@ -1,14 +1,20 @@
-//8/31/26 
+//9/30/26 
 //Continuous rotation motor changed from MG90D to BLS-HV70MG
+//180 degree motor also changed to continuous rotation motor, but going to be used for the arm. Switched from MG90D to BLS-HV70MG.
+  //Buy a 5V power supply to power our wheel motor directly. 
+//This changes the logic to rotate the arm based on the milliseconds it takes to move instead of a precise angle.
+//We want the arm to move in an approximately 45 degree angle total range.
 //Changed rotation time from 2000ms to 4000ms for slower wheel rotation
 //Added safeReset() to begin the servos at a safe position, mode 90
+
+//NOT YET CHANGED REST MODE(90) TO COMPENSATE FOR THE CONTINUOUS ROTATION MOTOR
 
 
 #include <Servo.h>
 
 // -------------------------
 // Servo Objects
-Servo motorA;   // Standard 180° servo motor MG995 (lifting arm)
+Servo motorA;   // Standard 180° servo motor BLS-HV70MG (lifting arm)
 Servo motorW;   // Continuous rotation servo motor BLS-HV70MG (wheel)
 
 
@@ -37,12 +43,24 @@ const int rightThreshold = 750;   // Mode 180
 float filteredJoy = 512;
 
 // -------------------------
+// ARM ROTATION SETTINGS
+// -------------------------
+
+const int armCW  = 180;  // Arm rotates clockwise
+const int armCCW = 0;    // Arm rotates counter-clockwise
+const int armStop = 90;
+
+// CALIBRATE THESE VALUES
+const unsigned long arm45Time = 500;  // Time for approximately 45 degrees
+
+
+// -------------------------
 // System State (makes the project a state machine)
 bool modeRunning = false;       // will be true while a mode is running
 bool joystickReturned = true;   // the joystick must be returned to the center before another mode runs
 unsigned long lastRunTime = 0;
 
-const unsigned long cooldownTime = 3000;  // 3 sec between activations
+const unsigned long cooldownTime = 7000;  // 7 sec between activations
 const unsigned long thermalDelay = 5000;  // an extra pause after the wheel spins
 
 void setup() {
@@ -86,7 +104,7 @@ void loop() {
   }
   
   // -------------------------
-  // Mode Selection
+  // Joystick Mode Selection
   // -------------------------
   if (joy > centerLow && joy < centerHigh) //****LEFT OFF HERE 8/4/26 ONE SHOT ACTIVATION****
   {
@@ -131,16 +149,17 @@ void mode0() {
   modeRunning = true;
   Serial.println("Mode 0");
 
-  motorA.write(0);
-  delay(1000);
+  rotateArm(arm45Time, armCW);
 
-  motorW.write(180); // CW
+  // wheel operation
+  motorW.write(180);
   delay(rotations * oneRotationTime);
-  motorW.write(90);  // stop
-  lastRunTime = millis();
+  motorW.write(90);
 
-modeRunning = false;
+  lastRunTime = millis();
+  modeRunning = false;
 }
+
 
 // -------------------------
 // MODE 90
@@ -167,13 +186,14 @@ void mode180() {
   modeRunning = true;
   Serial.println("Mode 180");
 
-  motorA.write(180);
-  delay(1000);
+  rotateArm(arm45Time, armCW);
 
-  motorW.write(0); // CCW
+  // wheel operation
+  motorW.write(0);
   delay(rotations * oneRotationTime);
-  motorW.write(90); // stop
-  lastRunTime = millis();
+  motorW.write(90);
 
-modeRunning = false;
+  lastRunTime = millis();
+  modeRunning = false;
 }
+
