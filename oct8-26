@@ -63,8 +63,8 @@ float filteredJoy = 512;
 // ARM ROTATION SETTINGS
 // -------------------------
 
-const int armCW  = 100;  // Arm rotates clockwise
-const int armCCW = 80;    // Arm rotates counter-clockwise
+const int armCW  = 97;  // Arm rotates clockwise
+const int armCCW = 83;    // Arm rotates counter-clockwise
 const int armStop = 90;  // Arm stops
 
 // Previous calibration:
@@ -75,7 +75,7 @@ const unsigned long arm22Time = 250;
 // Approximately 45 degrees:
 // 250 ms × (45 / 22) ≈ 511 ms
 
-const unsigned long arm45Time = 500;
+const unsigned long arm45Time = 300;
 
 
 // -------------------------
