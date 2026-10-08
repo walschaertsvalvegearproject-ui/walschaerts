@@ -1,0 +1,370 @@
+// 10/8/26
+// Continuous rotation motor changed from MG90D to BLS-HV70MG
+// 180 degree motor also changed to continuous rotation motor,
+// but going to be used for the arm.
+// Switched from MG90D to BLS-HV70MG.
+// Bought a 6V power supply
+//
+// This changes the logic to rotate the arm based on the milliseconds
+// it takes to move instead of a precise angle.
+//
+// We want the arm to move in an approximately 45 degree angle total range.
+//
+// NOT YET CHANGED REST MODE (90) TO COMPENSATE FOR THE
+// CONTINUOUS ROTATION MOTOR
+
+
+#include <Servo.h>
+
+
+// -------------------------
+// Servo Objects
+// -------------------------
+
+Servo motorA;   // Continuous rotation BLS-HV70MG (lifting arm)
+Servo motorW;   // Continuous rotation BLS-HV70MG (wheel)
+
+
+// -------------------------
+// Pins
+// -------------------------
+
+const int motorAPin = 5;
+const int motorWPin = 10;
+const int joyPin    = A0;
+
+
+// -------------------------
+// Wheel Rotation Timing
+// -------------------------
+
+const unsigned long oneRotationTime = 4000; // milliseconds per rotation
+const int rotations = 5;
+
+
+// -------------------------
+// Joystick Thresholds
+// -------------------------
+
+const int leftThreshold  = 300;   // Mode 0
+const int centerLow      = 450;   // Mode 90 lower bound
+const int centerHigh     = 600;   // Mode 90 upper bound
+const int rightThreshold = 750;   // Mode 180
+
+
+// -------------------------
+// Joystick Smoothing
+// -------------------------
+
+float filteredJoy = 512;
+
+
+// -------------------------
+// ARM ROTATION SETTINGS
+// -------------------------
+
+const int armCW  = 180;  // Arm rotates clockwise
+const int armCCW = 0;    // Arm rotates counter-clockwise
+const int armStop = 90;  // Arm stops
+
+// Previous calibration:
+// 250 ms ≈ 22 degrees
+
+const unsigned long arm22Time = 250;
+
+// Approximately 45 degrees:
+// 250 ms × (45 / 22) ≈ 511 ms
+
+const unsigned long arm45Time = 500;
+
+
+// -------------------------
+// System State
+// -------------------------
+
+bool modeRunning = false;
+bool joystickReturned = true;
+unsigned long lastRunTime = 0;
+
+const unsigned long cooldownTime = 4000;
+const unsigned long thermalDelay = 5000;
+
+
+// =====================================================
+// SETUP
+// =====================================================
+
+void setup() {
+
+  Serial.begin(9600);
+
+  motorA.attach(motorAPin);
+  motorW.attach(motorWPin);
+
+  // Stop both continuous-rotation motors
+  motorA.write(armStop);
+  motorW.write(90);
+
+  safeReset();
+
+  Serial.println("Joystick Control Ready");
+}
+
+
+// =====================================================
+// LOOP
+// =====================================================
+
+void loop() {
+
+  if (modeRunning) {
+    return;
+  }
+
+
+  int rawJoy = analogRead(joyPin);
+
+
+  // Smooth the joystick reading
+  filteredJoy = 0.8 * filteredJoy + 0.2 * rawJoy;
+
+  int joy = (int)filteredJoy;
+
+
+  // Debug
+  Serial.print("Joystick: ");
+  Serial.println(rawJoy);
+
+
+  // Cooldown
+  if (millis() - lastRunTime < cooldownTime) {
+    return;
+  }
+
+
+  // Joystick fault protection
+  if (joy < 10 || joy > 1010) {
+
+    Serial.println("Joystick Fault");
+    return;
+  }
+
+
+  // -------------------------
+  // Joystick Mode Selection
+  // -------------------------
+
+  if (joy > centerLow && joy < centerHigh) {
+
+    // Joystick has returned to neutral
+    joystickReturned = true;
+  }
+
+
+  // Don't allow another mode until
+  // joystick has returned to center
+
+  if (!joystickReturned) {
+    return;
+  }
+
+
+  // -------------------------
+  // MODE 0
+  // -------------------------
+
+  if (joy < leftThreshold) {
+
+    joystickReturned = false;
+
+    mode0();
+  }
+
+
+  // -------------------------
+  // MODE 180
+  // -------------------------
+
+  else if (joy > rightThreshold) {
+
+    joystickReturned = false;
+
+    mode180();
+  }
+}
+
+
+// =====================================================
+// SAFE RESET
+// =====================================================
+
+void safeReset() {
+
+  // Stop wheel
+  motorW.write(90);
+  delay(700);
+
+  // Stop arm
+  motorA.write(armStop);
+  delay(700);
+}
+
+
+// =====================================================
+// ROTATE ARM
+// =====================================================
+//
+// Because motorA is now a continuous-rotation motor,
+// it cannot move directly to a specific angle.
+//
+// Instead:
+//
+// 1. Start motor in requested direction
+// 2. Let it run for the requested amount of time
+// 3. Stop the motor
+//
+// Example:
+//
+// rotateArm(500, armCW);
+//
+// means:
+//
+// Run clockwise for 500 ms
+// Then stop.
+//
+// =====================================================
+
+void rotateArm(unsigned long moveTime, int direction) {
+
+  Serial.println("Arm moving...");
+
+  // Start arm motor
+  motorA.write(direction);
+
+  // Allow arm to move for specified time
+  delay(moveTime);
+
+  // Stop arm
+  motorA.write(armStop);
+
+  Serial.println("Arm stopped");
+
+  // Small pause after arm stops
+  delay(250);
+}
+
+
+// =====================================================
+// MODE 0
+// =====================================================
+//
+// Arm moves approximately 45 degrees
+// Wheel spins clockwise for 5 rotations
+//
+// =====================================================
+
+void mode0() {
+
+  modeRunning = true;
+
+  Serial.println("Mode 0");
+
+
+  // Move arm approximately 45 degrees
+  // using timing rather than position.
+
+  rotateArm(arm45Time, armCW);
+
+
+  // -------------------------
+  // Wheel operation
+  // -------------------------
+
+  Serial.println("Wheel starting");
+
+  motorW.write(180);
+
+  delay(rotations * oneRotationTime);
+
+  motorW.write(90);
+
+  Serial.println("Wheel stopped");
+
+
+  lastRunTime = millis();
+
+  modeRunning = false;
+}
+
+
+// =====================================================
+// MODE 90
+// =====================================================
+//
+// Both motors stopped
+//
+// NOTE:
+// Since motorA is continuous rotation,
+// motorA.write(90) does NOT mean "move to 90 degrees."
+// It means "stop."
+//
+// =====================================================
+
+void mode90() {
+
+  modeRunning = true;
+
+  Serial.println("Mode 90");
+
+
+  motorA.write(armStop);
+  motorW.write(90);
+
+
+  lastRunTime = millis();
+
+  modeRunning = false;
+}
+
+
+// =====================================================
+// MODE 180
+// =====================================================
+//
+// Arm moves approximately 45 degrees
+// Wheel spins counter-clockwise for 5 rotations
+//
+// =====================================================
+
+void mode180() {
+
+  modeRunning = true;
+
+  Serial.println("Mode 180");
+
+
+  // Move arm approximately 45 degrees
+  // using timing rather than position.
+
+  rotateArm(arm45Time, armCW);
+
+
+  // -------------------------
+  // Wheel operation
+  // -------------------------
+
+  Serial.println("Wheel starting");
+
+  motorW.write(0);
+
+  delay(rotations * oneRotationTime);
+
+  motorW.write(90);
+
+  Serial.println("Wheel stopped");
+
+
+  lastRunTime = millis();
+
+  modeRunning = false;
+}
