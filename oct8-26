@@ -39,7 +39,7 @@ const int joyPin    = A0;
 // -------------------------
 
 const unsigned long oneRotationTime = 4000; // milliseconds per rotation
-const int rotations = 5;
+const int rotations = 2;
 
 
 // -------------------------
@@ -63,8 +63,8 @@ float filteredJoy = 512;
 // ARM ROTATION SETTINGS
 // -------------------------
 
-const int armCW  = 180;  // Arm rotates clockwise
-const int armCCW = 0;    // Arm rotates counter-clockwise
+const int armCW  = 100;  // Arm rotates clockwise
+const int armCCW = 80;    // Arm rotates counter-clockwise
 const int armStop = 90;  // Arm stops
 
 // Previous calibration:
@@ -86,7 +86,7 @@ bool modeRunning = false;
 bool joystickReturned = true;
 unsigned long lastRunTime = 0;
 
-const unsigned long cooldownTime = 4000;
+const unsigned long cooldownTime = 2000;
 const unsigned long thermalDelay = 5000;
 
 
@@ -250,7 +250,7 @@ void rotateArm(unsigned long moveTime, int direction) {
   Serial.println("Arm stopped");
 
   // Small pause after arm stops
-  delay(250);
+  delay(1000);
 }
 
 
@@ -269,12 +269,8 @@ void mode0() {
 
   Serial.println("Mode 0");
 
-
-  // Move arm approximately 45 degrees
-  // using timing rather than position.
-
+  // Move arm away from center
   rotateArm(arm45Time, armCW);
-
 
   // -------------------------
   // Wheel operation
@@ -282,7 +278,7 @@ void mode0() {
 
   Serial.println("Wheel starting");
 
-  motorW.write(180);
+  motorW.write(105);
 
   delay(rotations * oneRotationTime);
 
@@ -290,6 +286,13 @@ void mode0() {
 
   Serial.println("Wheel stopped");
 
+  // -------------------------
+  // Return arm to center
+  // -------------------------
+
+  Serial.println("Arm returning to center");
+
+  rotateArm(arm45Time, armCCW);
 
   lastRunTime = millis();
 
@@ -342,12 +345,8 @@ void mode180() {
 
   Serial.println("Mode 180");
 
-
-  // Move arm approximately 45 degrees
-  // using timing rather than position.
-
-  rotateArm(arm45Time, armCW);
-
+  // Move arm away from center
+  rotateArm(arm45Time, armCCW);
 
   // -------------------------
   // Wheel operation
@@ -355,7 +354,7 @@ void mode180() {
 
   Serial.println("Wheel starting");
 
-  motorW.write(0);
+  motorW.write(75);
 
   delay(rotations * oneRotationTime);
 
@@ -363,6 +362,13 @@ void mode180() {
 
   Serial.println("Wheel stopped");
 
+  // -------------------------
+  // Return arm to center
+  // -------------------------
+
+  Serial.println("Arm returning to center");
+
+  rotateArm(arm45Time, armCW);
 
   lastRunTime = millis();
 
